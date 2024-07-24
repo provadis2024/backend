@@ -62,7 +62,7 @@ class Home(Resource):
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
 
-        return {'message': f'Hello, {user.username}! Welcome to the Time Management System'}, 201
+        return {'message': f'Hello, {user.username}! Welcome to the Time Management System', 'role': user.user_role, 'id': user.user_id}, 201
 
 class SignIn(Resource):
     def post(self):
@@ -548,9 +548,9 @@ class TimeEntries(Resource):
 class UserResource(Resource):
     @jwt_required()
     def get(self, user_id):
-        current_user_id = get_jwt_identity()
-        if current_user_id != user_id:
-            return {'message': 'Unauthorized access'}, 403
+        #current_user_id = get_jwt_identity()
+        #if current_user_id != user_id:
+        #    return {'message': 'Unauthorized access'}, 403
 
         user = User.query.get(user_id)
         if not user:
