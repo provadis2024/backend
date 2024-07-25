@@ -21,6 +21,7 @@ app.config['JWT_SECRET_KEY'] = 'your-secret-key'  # Change this!
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=8)  # Token expiration time
 app.config['JWT_TOKEN_LOCATION'] = ['headers']
 
+
 # define the database models
 class User(db.Model):
     user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -31,21 +32,25 @@ class User(db.Model):
     def set_password(self, password):
         self.user_password = generate_password_hash(password)
 
+
 class Project(db.Model):
     project_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('user.user_id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(400))
 
+
 class User_project(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.user_id'), primary_key=True, nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey('project.project_id'), primary_key=True, nullable=False)
+
 
 class Task(db.Model):
     task_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.project_id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(400))
+
 
 class Time_entry(db.Model):
     time_entry_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -55,6 +60,7 @@ class Time_entry(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime)
 
+
 # create the API resources for each endpoint
 class Home(Resource):
     @jwt_required()
@@ -62,7 +68,9 @@ class Home(Resource):
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
 
-        return {'message': f'Hello, {user.username}! Welcome to the Time Management System', 'role': user.user_role, 'id': user.user_id}, 201
+        return {'message': f'{user.username}', 'role': user.user_role,
+                'id': user.user_id}, 201
+
 
 class SignIn(Resource):
     def post(self):
@@ -120,7 +128,7 @@ class Projects(Resource):
                 'description': p.description
             } for p in projects])
         except Exception as e:
-            return {'message':f'Error: {str(e)}'},500
+            return {'message': f'Error: {str(e)}'}, 500
 
     @jwt_required()
     def post(self):
@@ -139,18 +147,19 @@ class Projects(Resource):
                 db.session.add(new_project)
                 db.session.commit()
 
-                if 'user_id' in data:
-                    new_user_project = User_project(
-                        project_id=new_project.project_id,
-                        user_id=data.get('user_id')
-                    )
-                    db.session.add(new_user_project)
+                if 'user_ids' in data:
+                    for user_id in data['user_ids']:
+                        new_user_project = User_project(
+                            project_id=new_project.project_id,
+                            user_id=user_id
+                        )
+                        db.session.add(new_user_project)
                     db.session.commit()
 
                 return {'message': 'Project created successfully', 'project_id': new_project.project_id}, 201
             except Exception as e:
                 db.session.rollback()
-                return {'message':f'Error creating a project: {str(e)}'},500
+                return {'message': f'Error creating a project: {str(e)}'}, 500
 
         else:
             return {'message': 'Only project managers and admins are allowed to create projects'}, 401
@@ -165,26 +174,32 @@ class Projects(Resource):
             if 'project_id' not in data:
                 return {'message': 'Missing required data field: project_id'}, 400
 
-            try:                                              # need to add description!!!
+            try:
+                project = Project.query.get_or_404(data['project_id'])
                 if 'owner_id' in data:
-                    project = Project.query.get_or_404(data['project_id'])
                     project.owner_id = data['owner_id']
-                if 'user_id' in data:
-                    new_user_project = User_project(
-                        project_id=data.get('project_id'),
-                        user_id=data.get('user_id')
-                    )
+                if 'description' in data:
+                    project.description = data['description']
+                if 'name' in data:
+                    project.name = data['name']
+                if 'user_ids' in data:
+                    for user_id in data['user_ids']:
+                        new_user_project = User_project(
+                            project_id=data.get('project_id'),
+                            user_id=user_id
+                        )
 
-                    db.session.add(new_user_project)
+                        db.session.add(new_user_project)
                 db.session.commit()
                 return {'message': 'Project data successfully changed'}, 201
 
             except Exception as e:
                 db.session.rollback()
-                return {'message':f'Error updating project: {str(e)}'},500
+                return {'message': f'Error updating project: {str(e)}'}, 500
 
         else:
             return {'message': 'Only project managers and admins are allowed to edit projects'}, 401
+
 
 class Users(Resource):
     def get(self):
@@ -198,7 +213,7 @@ class Users(Resource):
                 'user_role': u.user_role
             } for u in users])
         except Exception as e:
-            return {'message':f'Error: {str(e)}'},500
+            return {'message': f'Error: {str(e)}'}, 500
 
     @jwt_required()
     def post(self):
@@ -221,7 +236,7 @@ class Users(Resource):
                             'user_id': new_user.user_id}, 201
             except Exception as e:
                 db.session.rollback()
-                return {'message':f'Error creating a user: {str(e)}'},500
+                return {'message': f'Error creating a user: {str(e)}'}, 500
         else:
             return {'message': 'Only admins are allowed to create new users'}, 401
 
@@ -238,7 +253,7 @@ class Users(Resource):
                 user = User.query.get(data['user_id'])
                 if user:
                     if "password" in data:
-                        user.password = set_password(user, data['password'])
+                        user.set_password(data['password'])
                     if "user_role" in data:
                         user.user_role = data['user_role']
                     if "username" in data:
@@ -258,10 +273,11 @@ class Users(Resource):
                 user.username = data['username']
 
             db.session.commit()
-            return {'message':'The user data was successfully changed'},201
+            return {'message': 'The user data was successfully changed'}, 201
         except Exception as e:
             db.session.rollback()
-            return {'message':f'Error changing user: {str(e)}'},500
+            return {'message': f'Error changing user: {str(e)}'}, 500
+
 
 class Tasks(Resource):
     @jwt_required()
@@ -292,7 +308,7 @@ class Tasks(Resource):
                 'project_id': task.project_id
             } for task in tasks])
         except Exception as e:
-            return {'message': f'Error: {str(e)}'},500
+            return {'message': f'Error: {str(e)}'}, 500
 
     @jwt_required()
     def post(self):
@@ -338,7 +354,8 @@ class Tasks(Resource):
 
         except Exception as e:
             db.session.rollback()
-            return {'message':f'Error creating a task: {str(e)}'},500
+            return {'message': f'Error creating a task: {str(e)}'}, 500
+
 
 class Booking(Resource):
     @jwt_required()
@@ -347,6 +364,8 @@ class Booking(Resource):
         user = User.query.get(current_user_id)
 
         data = request.get_json()
+
+        msg = False
 
         if 'start_time' not in data or 'project_id' not in data or 'user_id' not in data or 'task_id' not in data:
             msg = 'Missing required field(s):'
@@ -416,7 +435,7 @@ class Booking(Resource):
                     'end_time': te.end_time.isoformat() if te.end_time else None
                 } for te in time_entries])
             except Exception as e:
-                return {'message':f'Error: {str(e)}'},500
+                return {'message': f'Error: {str(e)}'}, 500
 
         if user.user_role == "project_manager":
             try:
@@ -437,7 +456,7 @@ class Booking(Resource):
                     'end_time': te.end_time.isoformat() if te.end_time else None
                 } for te in time_entries])
             except Exception as e:
-                return {'message':f'Error: {str(e)}'},500
+                return {'message': f'Error: {str(e)}'}, 500
         if user.user_role == "employee":
             try:
                 query = Time_entry.query
@@ -489,6 +508,7 @@ class Booking(Resource):
             db.session.rollback()
             return {'message': f'Error updating time entry: {str(e)}'}, 500
 
+
 class TimeEntries(Resource):
     @jwt_required()
     def get(self):
@@ -525,7 +545,7 @@ class TimeEntries(Resource):
             } for te in time_entries])
         except Exception as e:
             db.session.rollback()
-            return {'message':f'Error creating time entry: {str(e)}'},500
+            return {'message': f'Error creating time entry: {str(e)}'}, 500
 
     def post(self):
         data = request.get_json()
@@ -543,7 +563,8 @@ class TimeEntries(Resource):
             return {'message': 'Time entry created successfully', 'time_entry_id': new_time_entry.time_entry_id}, 201
         except Exception as e:
             db.session.rollback()
-            return {'message':f'Error updating the time entry: {str(e)}'},500
+            return {'message': f'Error updating the time entry: {str(e)}'}, 500
+
 
 class UserResource(Resource):
     @jwt_required()
@@ -568,6 +589,7 @@ class UserResource(Resource):
                 'project_id': project.project_id
             } for project in projects]
         }
+
 
 class ProjectResource(Resource):
     @jwt_required()
@@ -597,6 +619,7 @@ class ProjectResource(Resource):
         }
 
         return jsonify(response)
+
 
 class UserWorkHoursResource(Resource):
     @jwt_required()
@@ -675,6 +698,7 @@ class UserWorkHoursResource(Resource):
         }
 
         return jsonify(response)
+
 
 class ProjectWorkHoursResource(Resource):
     @jwt_required()
@@ -772,6 +796,7 @@ class ProjectWorkHoursResource(Resource):
 
         return jsonify(response)
 
+
 class TaskWorkHoursResource(Resource):
     @jwt_required()
     def get(self):
@@ -857,6 +882,7 @@ class TaskWorkHoursResource(Resource):
 
         return jsonify(response_data)
 
+
 # set up the API routes
 api.add_resource(Home, '/')
 api.add_resource(SignIn, '/signin')
@@ -875,14 +901,17 @@ api.add_resource(TaskWorkHoursResource, '/task_work_hours')
 with app.app_context():
     db.create_all()
 
+
 def CheckTime(entry):
-    date = ((datetime.fromisoformat(entry)))
-    today = datetime.fromisoformat(datetime.now().strftime("%Y-%m-%d %H:%M"))
-    if (today - date > timedelta(days=7) or today < date):
+    date = datetime.fromisoformat(entry).replace(tzinfo=None)
+    today = datetime.now().replace(tzinfo=None)
+    if today - date > timedelta(days=7) or date - today > timedelta(days=7):
         return False
+
 
 def set_password(self, password):
     self.user_password = generate_password_hash(password)
+
 
 if __name__ == '__main__':
     app.run(debug=False, host="0.0.0.0")
