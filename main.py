@@ -601,8 +601,8 @@ class ProjectResource(Resource):
         if not project:
             abort(404, message="Project not found")
 
-        if current_user_id != project.owner_id and user.user_role != "admin":
-            return {'message': 'Unauthorized access'}, 403
+        #if current_user_id != project.owner_id and user.user_role != "admin":
+        #    return {'message': 'Unauthorized access'}, 403
 
         query = User.query
         users = query.join(User_project).filter(User_project.project_id == project_id).all()
